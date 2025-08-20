@@ -1,5 +1,4 @@
-flask
-gunicorn
-apscheduler
-requests
+fastapi
+uvicorn[standard]
+httpx
 beautifulsoup4
