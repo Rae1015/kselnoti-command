@@ -1,81 +1,166 @@
-import json
 import os
 import asyncio
+from datetime import datetime
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, Response
 import httpx
 from bs4 import BeautifulSoup
 import uvicorn
 
 app = FastAPI()
 
-# JSON 파일 경로
-ALERT_LIST_FILE = "kselnoti_list.json"
+# ------------------------------
+# 두레이 Webhook
+# ------------------------------
+DOORAY_WEBHOOK_URL = os.environ.get("DOORAY_WEBHOOK_URL")
 
-# 최대 저장 모델 수
-MAX_ALERTS = 20
+async def send_dooray_message(message: str):
+    """
+    두레이 Webhook으로 메시지 전송
+    """
+    if not DOORAY_WEBHOOK_URL:
+        print("⚠️ DOORAY_WEBHOOK_URL 환경변수가 설정되지 않았습니다.")
+        return
 
-# 도움말 메시지
-HELP_MESSAGE = (
-    "**/(노트모양)kselnoti 커맨드 사용법**\n"
-    "`/kselnoti +모델명` : 알림 리스트에 모델 추가\n"
-    "`/kselnoti -모델명` : 알림 리스트에서 모델 제거\n"
-    "`/kselnoti list` : 현재 알림 리스트 확인\n"
-    "`/kselnoti help` : 도움말"
+    payload = {"text": message}
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(DOORAY_WEBHOOK_URL, json=payload)
+            if resp.status_code == 200:
+                print(f"✅ 메시지 전송 성공: {message}")
+            else:
+                print(f"⚠️ 메시지 전송 실패: {resp.status_code}")
+        except Exception as e:
+            print(f"❌ 메시지 전송 중 오류: {e}")
+
+# ------------------------------
+# 전역 AsyncClient (연결 풀)
+# ------------------------------
+client = httpx.AsyncClient(
+    timeout=5.0,
+    limits=httpx.Limits(
+        max_connections=10,
+        max_keepalive_connections=5,
+        keepalive_expiry=30.0
+    )
 )
 
-# JSON 파일에서 리스트 불러오기
-def load_alert_list():
-    if not os.path.exists(ALERT_LIST_FILE):
-        return []
-    with open(ALERT_LIST_FILE, "r", encoding="utf-8") as f:
-        try:
-            return json.load(f)
-        except json.JSONDecodeError:
-            return []
+SEARCH_URL = "https://www.crefia.or.kr/portal/store/cardTerminal/cardTerminalList.xx"
 
-# JSON 파일에 리스트 저장
-def save_alert_list(alert_list):
-    with open(ALERT_LIST_FILE, "w", encoding="utf-8") as f:
-        json.dump(alert_list[:MAX_ALERTS], f, ensure_ascii=False, indent=2)
+# ------------------------------
+# 알림용 모델 리스트
+# ------------------------------
+noti_models = set()  # 최대 20개
 
+# ------------------------------
+# 헬스체크 루트
+# ------------------------------
+@app.api_route("/", methods=["GET", "HEAD"])
+async def health_check(request: Request):
+    if request.method == "HEAD":
+        return {"status": "ok"}  # UptimeRobot HEAD 대응
+    return {"status": "✅ KSELNOTI bot is running"}
+
+# ------------------------------
+# 모델 정보 조회 함수
+# ------------------------------
+async def fetch_model_info(model_name: str):
+    payload = {"searchKey": "03", "searchValue": model_name, "currentPage": "1"}
+    response = await client.post(SEARCH_URL, data=payload)
+    soup = BeautifulSoup(response.text, "html.parser")
+    rows = soup.select("table tbody tr")
+
+    # 검색 결과 확인
+    no_result_text = soup.get_text(strip=True)
+    if "검색된 건이 없습니다." in no_result_text or not rows:
+        return None
+
+    for row in rows[:10]:
+        cols = row.find_all("td")
+        if len(cols) >= 8:
+            model = cols[5].text.strip().split()[0]
+            if model == model_name:
+                cert_no = cols[2].text.strip()
+                identifier = cols[3].text.strip().split()[0]
+                date_parts = cols[6].text.strip().split()
+                cert_date = date_parts[0]
+                exp_date = date_parts[1] if len(date_parts) > 1 else ""
+                return (
+                    f"[{cert_no}] {model}\n"
+                    f" - 식별번호 : {identifier}\n"
+                    f" - 인증일자 : {cert_date}\n"
+                    f" - 만료일자 : {exp_date}"
+                )
+    return None
+
+# ------------------------------
+# /kselnoti 슬래시 커맨드
+# ------------------------------
 @app.post("/kselnoti")
-async def kselnoti_command(request: Request):
+async def kselnoti(request: Request):
     data = await request.json()
     text = data.get("text", "").strip()
 
-    # 도움말
-    if not text or text.lower() == "help":
-        return {"text": HELP_MESSAGE}
+    if not text:
+        return {"text": "모델명 또는 명령어를 입력해주세요. 예: /kselnoti +KTC-K501"}
 
-    alert_list = load_alert_list()
+    # help
+    if text.lower() == "help":
+        help_msg = (
+            "**/kselnoti 커맨드 사용법**\n"
+            "`/kselnoti +모델명` : 알림 리스트에 모델 추가\n"
+            "`/kselnoti -모델명` : 알림 리스트에서 모델 제거\n"
+            "`/kselnoti list` : 현재 알림 리스트 확인\n"
+            "`/kselnoti help` : 도움말"
+        )
+        return {"text": help_msg}
 
-    # 리스트 확인
+    # list
     if text.lower() == "list":
-        if not alert_list:
+        if not noti_models:
             return {"text": "알림 리스트가 비어 있습니다."}
-        return {"text": "현재 알림 리스트:\n" + "\n".join(alert_list)}
+        return {"text": "현재 알림 리스트:\n" + "\n".join(noti_models)}
 
-    # 모델 추가
+    # +모델 추가
     if text.startswith("+"):
-        model_name = text[1:].strip()
-        if model_name in alert_list:
-            return {"text": f"모델 [{model_name}]는 이미 알림 리스트에 존재합니다."}
-        alert_list.append(model_name)
-        save_alert_list(alert_list)
-        return {"text": f"모델 [{model_name}]를 알림 리스트에 추가했습니다."}
+        model = text[1:].strip()
+        if len(noti_models) >= 20:
+            return {"text": "⚠️ 알림 리스트는 최대 20개까지 등록 가능합니다."}
+        noti_models.add(model)
+        return {"text": f"✅ [{model}] 모델이 알림 리스트에 추가되었습니다."}
 
-    # 모델 제거
+    # -모델 제거
     if text.startswith("-"):
-        model_name = text[1:].strip()
-        if model_name not in alert_list:
-            return {"text": f"모델 [{model_name}]는 알림 리스트에 존재하지 않습니다."}
-        alert_list.remove(model_name)
-        save_alert_list(alert_list)
-        return {"text": f"모델 [{model_name}]를 알림 리스트에서 제거했습니다."}
+        model = text[1:].strip()
+        noti_models.discard(model)
+        return {"text": f"✅ [{model}] 모델이 알림 리스트에서 제거되었습니다."}
 
-    # 알 수 없는 명령어
-    return {"text": "알 수 없는 명령어입니다. `/kselnoti help`를 참고해주세요."}
+    return {"text": "⚠️ 알 수 없는 명령입니다. `/kselnoti help`를 참고하세요."}
+
+# ------------------------------
+# 모델 변경 체크 주기 (08~20시 1시간마다)
+# ------------------------------
+async def monitor_changes():
+    last_info = dict()
+    while True:
+        now = datetime.now()
+        if 8 <= now.hour <= 20 and noti_models:
+            for model in list(noti_models):
+                info = await fetch_model_info(model)
+                # 변경 감지
+                if info is None and last_info.get(model) is not None:
+                    await send_dooray_message(f"⚠️ 단말기 인증정보가 업데이트 되었습니다.\n[{model}] 검색 결과가 더 이상 없습니다.")
+                    noti_models.discard(model)
+                    last_info.pop(model, None)
+                elif info is not None:
+                    if last_info.get(model) != info:
+                        await send_dooray_message(f"⚡ 단말기 인증정보가 업데이트 되었습니다.\n{info}")
+                        noti_models.discard(model)
+                        last_info[model] = info
+        await asyncio.sleep(3600)  # 1시간마다 체크
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(monitor_changes())
 
 # ------------------------------
 # 서버 실행
