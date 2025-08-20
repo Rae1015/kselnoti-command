@@ -106,11 +106,11 @@ async def kselnoti(request: Request):
     # help
     if text.lower() == "help":
         help_msg = (
-            "**/kselnoti 커맨드 사용법**\n"
-            "`/kselnoti +모델명` : 알림 리스트에 모델 추가\n"
-            "`/kselnoti -모델명` : 알림 리스트에서 모델 제거\n"
-            "`/kselnoti list` : 현재 알림 리스트 확인\n"
-            "`/kselnoti help` : 도움말"
+            "📝 KSEL Notify 사용법:\n"
+            "/kselnoti 모델명 → 모델 등록\n"
+            "/kselnoti remove 모델명 → 모델 제거\n"
+            "/kselnoti list → 등록된 모델 확인\n"
+            "/kselnoti help → 도움말 보기"
         )
         return {"text": help_msg}
 
