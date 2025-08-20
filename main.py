@@ -1,6 +1,11 @@
 import json
 import os
+import asyncio
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse, Response
+import httpx
+from bs4 import BeautifulSoup
+import uvicorn
 
 app = FastAPI()
 
@@ -72,6 +77,9 @@ async def kselnoti_command(request: Request):
     # 알 수 없는 명령어
     return {"text": "알 수 없는 명령어입니다. `/kselnoti help`를 참고해주세요."}
 
+# ------------------------------
+# 서버 실행
+# ------------------------------
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
