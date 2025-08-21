@@ -1,133 +1,148 @@
-import logging
+import json
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 import httpx
-import os
+from bs4 import BeautifulSoup
 
 app = FastAPI()
-logging.basicConfig(level=logging.INFO)
+JSON_FILE = "models.json"
+SEARCH_URL = "https://www.crefia.or.kr/portal/store/cardTerminal/cardTerminalList.xx"
 
-# ✅ 임시 DB (실제 서비스에서는 DB 연결 필요)
-registered_models = set()
 
-# 🔑 Dooray App Token (환경변수 사용 권장)
-DOORAY_APP_TOKEN = os.getenv("DOORAY_APP_TOKEN", "your-app-token")
+# ------------------------------
+# JSON 데이터 로드/저장
+# ------------------------------
+def load_models():
+    try:
+        with open(JSON_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
 
-DOORAY_API_URL = "https://nhnent.dooray.com/messenger/api/commands/v1/send"
 
-# ========================
-# 🔹 Dooray 메시지 전송 함수
-# ========================
-async def send_dooray_message(channel_id: str, text: str, buttons=None):
-    headers = {
-        "Content-Type": "application/json;charset=UTF-8",
-        "Authorization": f"dooray-api {DOORAY_APP_TOKEN}"
-    }
+def save_models(models):
+    with open(JSON_FILE, "w", encoding="utf-8") as f:
+        json.dump(models, f, ensure_ascii=False, indent=2)
 
-    payload = {
-        "botName": "TerminalBot",
-        "botIconImage": "https://static.thenounproject.com/png/740742-200.png",
-        "channelId": channel_id,
-        "text": text,
-    }
+# ------------------------------
+# 크레피아 모델 정보 조회
+# ------------------------------
+async def fetch_model_info(model_name: str) -> str:
+    async with httpx.AsyncClient(timeout=10) as client:
+        payload = {"searchKey": "03", "searchValue": model_name, "currentPage": "1"}
+        response = await client.post(SEARCH_URL, data=payload)
+        soup = BeautifulSoup(response.text, "html.parser")
+        rows = soup.select("table tbody tr")
 
-    if buttons:
-        payload["attachments"] = [
-            {
-                "text": "선택하세요",
-                "actions": buttons
-            }
-        ]
+        if "검색된 건이 없습니다." in soup.get_text(strip=True) or not rows:
+            return f"🔍 [{model_name}] 검색 결과가 없습니다."
 
-    logging.info(f"📤 Dooray Send Payload: {payload}")
+        results = []
+        for row in rows[:10]:
+            cols = row.find_all("td")
+            if len(cols) >= 8:
+                cert_no = cols[2].text.strip()
+                identifier = cols[3].text.strip().split()[0]
+                model = cols[5].text.strip().split()[0]
+                date_parts = cols[6].text.strip().split()
+                cert_date = date_parts[0]
+                exp_date = date_parts[1] if len(date_parts) > 1 else ""
+                results.append(
+                    f"[{cert_no}] {model}\n"
+                    f" - 식별번호 : {identifier}\n"
+                    f" - 인증일자 : {cert_date}\n"
+                    f" - 만료일자 : {exp_date}"
+                )
+        return "\n\n".join(results)
 
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(DOORAY_API_URL, headers=headers, json=payload)
-        logging.info(f"✅ Dooray Response: {resp.status_code} {resp.text}")
-        return resp.status_code, resp.text
 
-# ========================
-# 🔹 크레피아 검색 (Dummy 예시)
-# ========================
-def search_model_in_crefia(model_name: str):
-    # 👉 실제 크롤링/검색 로직으로 교체 필요
-    if model_name == "dup-model":
-        return ["KTC-K501", "KTC-K502"]  # 여러 개
-    elif model_name == "exist-model":
-        return ["KTC-K501"]  # 1개
-    else:
-        return []  # 없음
-
-# ========================
-# 🔹 Dooray Slash Command 처리
-# ========================
-@app.post("/kselnoti")
-async def kselnoti_handler(request: Request):
-    data = await request.json()
-    logging.info(f"📥 Request Payload: {data}")
-
-    channel_id = data.get("channelId")
+# ------------------------------
+# /dooray/command (슬래시 커맨드)
+# ------------------------------
+@app.post("/dooray/command")
+async def handle_command(request: Request):
+    data = await request.form()
     text = data.get("text", "").strip()
+    if not text:
+        return {"text": "❗ 모델명을 입력해주세요. 예: /kselnoti KIS123"}
+
     model_name = text
+    models = load_models()
 
-    if not model_name:
-        await send_dooray_message(channel_id, "❌ 모델명을 입력해주세요. 예: `/kselnoti KTC-K501`")
-        return {"ok": True}
+    # 이미 존재
+    if any(m["model"] == model_name for m in models):
+        return {
+            "text": f"리스트에 [{model_name}] 모델명이 이미 존재합니다. 제거할까요?",
+            "attachments": [
+                {
+                    "actions": [
+                        {"type": "button", "text": "제거", "name": "remove", "value": model_name}
+                    ]
+                }
+            ],
+        }
 
-    # 1️⃣ 리스트에 존재 여부 확인
-    if model_name in registered_models:
-        buttons = [
-            {
-                "name": "remove",
-                "text": "제거",
-                "type": "button",
-                "value": model_name
-            }
-        ]
-        await send_dooray_message(channel_id, f"⚠️ 리스트에 [{model_name}] 모델명이 이미 존재합니다. 제거할까요?", buttons)
-        return {"ok": True}
+    # 검색
+    search_result = await fetch_model_info(model_name)
 
-    # 2️⃣ 리스트에 없음 → 크레피아 검색
-    results = search_model_in_crefia(model_name)
+    if "검색 결과가 없습니다" in search_result:
+        models.append({"model": model_name})
+        save_models(models)
+        return {"text": f"신규 모델명 [{model_name}] 등록 완료 ✅"}
 
-    if len(results) == 0:
-        registered_models.add(model_name)
-        await send_dooray_message(channel_id, f"✅ 신규 모델명 [{model_name}] 등록 완료")
-    elif len(results) == 1:
-        registered_models.add(results[0])
-        await send_dooray_message(channel_id, f"✅ 모델명 [{results[0]}] 등록 완료")
-    else:
-        buttons = [
-            {
-                "name": "register",
-                "text": result,
-                "type": "button",
-                "value": result
-            } for result in results
-        ]
-        await send_dooray_message(channel_id, f"🔎 등록할 모델을 선택해주세요", buttons)
+    if "\n\n" in search_result:  # 여러 개
+        options = []
+        for line in search_result.split("\n\n"):
+            model_line = line.split("\n")[0]
+            model_candidate = model_line.split("] ")[-1].split()[0]
+            options.append(
+                {"type": "button", "text": model_candidate, "name": "add", "value": model_candidate}
+            )
+        return {"text": "등록할 모델을 선택해주세요 👇", "attachments": [{"actions": options}]}
 
-    return {"ok": True}
+    # 검색 결과 1개
+    models.append({"model": model_name})
+    save_models(models)
+    return {"text": f"[{model_name}] 모델명 등록 완료 ✅"}
 
-# ========================
-# 🔹 버튼 클릭 Callback 처리
-# ========================
-@app.post("/kselnoti-action")
-async def kselnoti_action_handler(request: Request):
+
+# ------------------------------
+# /dooray/interactive (버튼 콜백)
+# ------------------------------
+@app.post("/dooray/interactive")
+async def handle_interactive(request: Request):
     data = await request.json()
-    logging.info(f"🖱️ Button Click Payload: {data}")
+    action = data["actions"][0]
+    action_type = action["name"]
+    model_name = action["value"]
 
-    action = data.get("actionName")
-    value = data.get("value")
-    channel_id = data.get("channelId")
+    models = load_models()
 
-    if action == "remove":
-        if value in registered_models:
-            registered_models.remove(value)
-            await send_dooray_message(channel_id, f"🗑️ 모델명 [{value}] 제거 완료")
-        else:
-            await send_dooray_message(channel_id, f"⚠️ 모델명 [{value}] 은 리스트에 없습니다.")
-    elif action == "register":
-        registered_models.add(value)
-        await send_dooray_message(channel_id, f"✅ 모델명 [{value}] 등록 완료")
+    if action_type == "remove":
+        models = [m for m in models if m["model"] != model_name]
+        save_models(models)
+        return JSONResponse({"text": f"[{model_name}] 제거 완료 🗑"})
 
-    return {"ok": True}
+    elif action_type == "add":
+        if not any(m["model"] == model_name for m in models):
+            models.append({"model": model_name})
+            save_models(models)
+        return JSONResponse({"text": f"[{model_name}] 등록 완료 ✅"})
+
+    return JSONResponse({"text": "⚠ 알 수 없는 동작"})
+
+
+# ------------------------------
+# 헬스체크
+# ------------------------------
+@app.get("/")
+def root():
+    return {"status": "ok"}
+
+# ------------------------------
+# 서버 실행
+# ------------------------------
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
+
