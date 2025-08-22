@@ -157,9 +157,12 @@ async def kselnoti(request: Request):
 async def kselnoti_action(request: Request):
     data = await request.json()
     print("DEBUG kselnoti-action:", data)  # 실제 요청 로그 확인
-    action = data.get("actions", [])[0]
-    action_name = action.get("name")
-    action_value = action.get("value")
+
+    action_name = data.get("actionName")
+    action_value = data.get("actionValue")
+
+    if not action_name:
+        return {"text": "⚠️ actionName이 전달되지 않았습니다."}
 
     if action_name == "remove":
         remove_model_entry(action_value)
