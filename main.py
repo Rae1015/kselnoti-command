@@ -79,12 +79,21 @@ async def fetch_model_info(model_name: str):
 @app.post("/kselnoti")
 async def kselnoti(request: Request):
     data = await request.json()
-    model_name = data.get("text", "").strip()
+    text = data.get("text", "").strip()
 
-    if not model_name:
+    if not text:
         return JSONResponse({"text": "⚠ 모델명을 입력해주세요."})
 
+    # --- 리스트 조회 기능 ---
+    if text.lower() == "list":
+        models = load_models()
+        if not models:
+            return JSONResponse({"text": "등록된 모델이 없습니다."})
+        model_names = [m["model"] for m in models]
+        return JSONResponse({"text": "등록된 모델 목록:\n" + "\n".join(model_names)})
+
     # 이미 등록된 모델 확인
+    model_name = text
     registered_models = [m["model"] for m in load_models()]
     if model_name in registered_models:
         return JSONResponse(
@@ -168,8 +177,3 @@ async def kselnoti_action(request: Request):
         return JSONResponse({"text": "🛑 작업 종료"})
 
     return JSONResponse({"text": "⚠ 알 수 없는 동작입니다."})
-
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port)
