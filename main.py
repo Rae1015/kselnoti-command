@@ -153,7 +153,7 @@ async def kselnoti(request: Request):
 # ------------------------------
 # 버튼 액션 처리
 # ------------------------------
-@app.post("/kselnoti-action")
+@app.post("/command")
 async def kselnoti_action(request: Request):
     data = await request.json()
     action = data.get("actions", [])[0]
