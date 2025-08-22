@@ -164,18 +164,18 @@ async def kselnoti_action(request: Request):
 
     if action_name == "remove":
         remove_model_entry(action_value)
-        return JSONResponse({"text": f"🗑 [{action_value}] 제거 완료"}, "replaceOriginal": True)
+        return JSONResponse({"text": f"🗑 [{action_value}] 제거 완료", "replaceOriginal": True})
 
     if action_name == "new_register":
         add_model_entry({"model": action_value})
-        return JSONResponse({"text": f"✅ 신규 모델 [{action_value}] 등록 완료"}, "replaceOriginal": True)
+        return JSONResponse({"text": f"✅ 신규 모델 [{action_value}] 등록 완료", "replaceOriginal": True})
 
     if action_name == "register":
         entry = json.loads(action_value)
         add_model_entry(entry)
-        return JSONResponse({"text": f"✅ 모델 [{entry['model']}] 등록 완료"}, "replaceOriginal": True)
+        return JSONResponse({"text": f"✅ 모델 [{entry['model']}] 등록 완료", "replaceOriginal": True})
 
     if action_name == "close":
-        return JSONResponse({"text": "등록 정보 알림이 필요할 때 찾아주세요🙌🏻"}, "replaceOriginal": True)
+        return JSONResponse({"text": "등록 정보 알림이 필요할 때 찾아주세요🙌🏻", "replaceOriginal": True})
 
-    return JSONResponse({"text": "⚠ 알 수 없는 동작입니다."}, "replaceOriginal": True)
+    return JSONResponse({"text": "⚠ 알 수 없는 동작입니다.", "replaceOriginal": True})
