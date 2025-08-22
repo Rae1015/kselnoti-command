@@ -10,7 +10,11 @@ app = FastAPI()
 
 client = httpx.AsyncClient(
     timeout=5.0,
-    limits=httpx.Limits(max_connections=10, max_keepalive_connections=5, keepalive_expiry=30.0)
+    limits=httpx.Limits(
+        max_connections=10,
+        max_keepalive_connections=5,
+        keepalive_expiry=30.0
+    )
 )
 
 SEARCH_URL = "https://www.crefia.or.kr/portal/store/cardTerminal/cardTerminalList.xx"
@@ -29,17 +33,66 @@ async def fetch_model_info(model_name: str):
     soup = BeautifulSoup(response.text, "html.parser")
     rows = soup.select("table tbody tr")
 
-    no_result_text = soup.get_text(strip=True)
-    if "검색된 건이 없습니다." in no_result_text or not rows:
+    if "검색된 건이 없습니다." in soup.get_text(strip=True) or not rows:
         return []
 
     results = []
-    for row in rows[:20]:  # 20개까지 파싱
+    for row in rows:
         cols = row.find_all("td")
         if len(cols) >= 8:
             model = cols[5].text.strip().split()[0]
             results.append(model)
+
     return results
+
+
+def build_buttons(model_name: str, results: list):
+    # 결과 없음
+    if not results:
+        return {
+            "text": f"🔍 [{model_name}] 검색 결과가 없습니다.",
+            "attachments": [
+                {
+                    "text": "신규 모델로 등록하시겠습니까?",
+                    "actions": [
+                        {"type": "button", "text": "신규등록", "style": "primary"},
+                        {"type": "button", "text": "종료", "style": "danger"}
+                    ]
+                }
+            ]
+        }
+
+    # 정확히 일치하는 값만 필터링
+    exact_matches = [r for r in results if r == model_name]
+
+    # 일치하는게 있으면 등록/종료 버튼
+    if len(exact_matches) == 1:
+        return {
+            "text": f"✅ [{model_name}] 검색 결과가 확인되었습니다.",
+            "attachments": [
+                {
+                    "text": f"모델 [{model_name}] 처리 옵션:",
+                    "actions": [
+                        {"type": "button", "text": "등록", "style": "primary"},
+                        {"type": "button", "text": "종료", "style": "danger"}
+                    ]
+                }
+            ]
+        }
+
+    # 일치하는게 없으면 신규등록/종료 버튼
+    return {
+        "text": f"❓ [{model_name}] 검색 결과와 정확히 일치하는 값이 없습니다.",
+        "attachments": [
+            {
+                "text": "신규 모델로 등록하시겠습니까?",
+                "actions": [
+                    {"type": "button", "text": "신규등록", "style": "primary"},
+                    {"type": "button", "text": "종료", "style": "danger"}
+                ]
+            }
+        ]
+    }
 
 
 @app.post("/kselnoti")
@@ -48,64 +101,15 @@ async def kselnoti_command(request: Request):
     model_name = data.get("text", "").strip()
 
     if not model_name:
-        return {
-            "deleteOriginal": True,
-            "text": "모델명을 입력해주세요. 예: `/kselnoti ktc-k501`"
-        }
+        return {"deleteOriginal": True, "text": "모델명을 입력해주세요. 예: /kselnoti ktc-k501"}
 
     try:
-        models = await asyncio.wait_for(fetch_model_info(model_name), timeout=3.0)
-
-        # 결과 0개
-        if not models:
-            return {
-                "deleteOriginal": True,
-                "text": f"🔍 [{model_name}] 검색 결과가 없습니다.",
-                "attachments": [
-                    {
-                        "text": "선택하세요",
-                        "actions": [
-                            {"type": "button", "text": "신규등록", "value": f"register:{model_name}"},
-                            {"type": "button", "text": "종료", "value": "close"}
-                        ]
-                    }
-                ]
-            }
-
-        # 입력값과 길이까지 일치하는 모델만 필터링
-        exact_models = [m for m in models if m.strip().lower() == model_name.strip().lower()]
-
-        # 결과 1개
-        if len(exact_models) == 1:
-            return {
-                "deleteOriginal": True,
-                "text": f"✅ [{exact_models[0]}] 검색 결과를 찾았습니다.",
-                "attachments": [
-                    {
-                        "text": "선택하세요",
-                        "actions": [
-                            {"type": "button", "text": "등록", "value": f"register:{exact_models[0]}"},
-                            {"type": "button", "text": "종료", "value": "close"}
-                        ]
-                    }
-                ]
-            }
-
-        # 결과 다수 (최대 10개 버튼)
-        buttons = [{"type": "button", "text": m, "value": f"model:{m}"} for m in models[:10]]
-        return {
-            "deleteOriginal": True,
-            "text": f"🔍 [{model_name}] 검색 결과 다수 발견 ({len(models)}건)",
-            "attachments": [
-                {
-                    "text": "모델명을 선택하세요",
-                    "actions": buttons
-                }
-            ]
-        }
+        results = await asyncio.wait_for(fetch_model_info(model_name), timeout=3.0)
+        message = build_buttons(model_name, results)
+        return {"deleteOriginal": True, **message}
 
     except asyncio.TimeoutError:
-        return {"deleteOriginal": True, "text": f"⚠️ [{model_name}] 조회 중 응답이 지연되었습니다. 잠시 후 다시 시도해주세요."}
+        return {"deleteOriginal": True, "text": f"⚠️ [{model_name}] 조회 중 응답이 지연되었습니다."}
 
 
 if __name__ == "__main__":
