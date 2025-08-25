@@ -11,20 +11,21 @@ from fastapi import Response
 app = FastAPI()
 
 SEARCH_URL = "https://www.crefia.or.kr/portal/store/cardTerminal/cardTerminalList.xx"
-JSON_FILE = "models.json"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_FILE = os.path.join(BASE_DIR, "models.json")
 DOORAY_WEBHOOK_BASE = "https://nhnent.dooray.com/messenger/api/sendMessage?appToken=YOUR_APP_TOKEN"
 
 # ------------------------------
 # JSON 유틸
 # ------------------------------
 def load_models():
-    if not os.path.exists(JSON_FILE):
+    if not os.path.exists(MODEL_FILE):
         return []
-    with open(JSON_FILE, "r", encoding="utf-8") as f:
+    with open(MODEL_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
 def save_models(models):
-    with open(JSON_FILE, "w", encoding="utf-8") as f:
+    with open(MODEL_FILE, "w", encoding="utf-8") as f:
         json.dump(models, f, ensure_ascii=False, indent=2)
 
 def add_model_entry(entry: dict):
