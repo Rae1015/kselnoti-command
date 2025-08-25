@@ -15,6 +15,9 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_FILE = os.path.join(BASE_DIR, "models.json")
 DOORAY_WEBHOOK_BASE = "https://nhnent.dooray.com/messenger/api/sendMessage?appToken=YOUR_APP_TOKEN"
 
+print("현재 작업 디렉터리:", os.getcwd())
+print("models.json 절대 경로:", os.path.abspath("models.json"))
+
 # ------------------------------
 # JSON 유틸
 # ------------------------------
