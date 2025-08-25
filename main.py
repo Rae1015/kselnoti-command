@@ -7,6 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from bs4 import BeautifulSoup
 
+
 app = FastAPI()
 
 SEARCH_URL = "https://www.crefia.or.kr/portal/store/cardTerminal/cardTerminalList.xx"
@@ -179,9 +180,10 @@ async def kselnoti_action(request: Request):
 # ------------------------------
 # 헬스체크 + 자동 모니터링
 # ------------------------------
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 async def health_check():
-    asyncio.create_task(check_models())
+    if getattr(Response, "method", None) == "HEAD":
+        return Response(status_code=200)  # body 없는 응답
     return {"status": "✅ KSEL bot is running"}
 
 # ------------------------------
@@ -212,7 +214,7 @@ async def check_models():
             add_model_entry({**r, "channel": channel_id})
             if channel_id:
                 await send_dooray_message(channel_id,
-                    f"🔔 [{r['model']}] 정보가 업데이트 되었어요!\n"
+                    f"🔔 [{r['model']}] 등록정보가 업데이트 되었어요!\n"
                     f"[{r['cert_no']}] {r['model']}\n"
                     f"- 식별번호: {r['identifier']}\n"
                     f"- 인증일자: {r['cert_date']}\n"
