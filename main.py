@@ -204,7 +204,17 @@ async def check_models():
         channel_id = saved_model.get("channel", "")
         if not results:
             continue
-        r = results[0]
+
+        # 🔹 모델명과 길이가 완전히 일치하는 결과만 필터링
+        filtered_results = [
+            r for r in results
+            if r["model"] == saved_model["model"] and len(r["model"]) == len(saved_model["model"])
+        ]
+
+        if not filtered_results:
+            continue
+
+        r = filtered_results[0]  # 첫 번째 결과 사용
         changed = False
         for key in ["cert_no", "identifier", "cert_date", "exp_date"]:
             if r.get(key) != saved_model.get(key):
