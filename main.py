@@ -74,7 +74,8 @@ async def fetch_model_info(model_name: str):
                             "cert_no": cert_no,
                             "identifier": identifier,
                             "model": model,
-                            "cert_date": cert_date,
+                            #"cert_date": cert_date,
+                            "cert_date": "9999.99.99",
                             "exp_date": exp_date,
                         }
                     )
