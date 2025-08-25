@@ -204,37 +204,47 @@ async def health_check():
 async def check_models():
     models = load_models()
     if not models:
+        print("[DEBUG] 등록된 모델이 없습니다.")
         return
+
+    print(f"[DEBUG] 총 {len(models)}개의 모델을 확인합니다.")
 
     tasks = []
     for model in models:
+        print(f"[DEBUG] 모델 확인 요청: {model['model']}")
         tasks.append(fetch_model_info(model["model"]))
     results_list = await asyncio.gather(*tasks)
 
     for saved_model, results in zip(models, results_list):
         channel_id = saved_model.get("channel", "")
+        print(f"[DEBUG] 저장된 모델: {saved_model['model']}, 조회 결과 수: {len(results)}")
+
         if not results:
+            print(f"[DEBUG] 조회 결과 없음: {saved_model['model']}")
             continue
 
-        # 🔹 모델명과 길이가 완전히 일치하는 결과만 필터링
+        # 모델명 완전 일치 필터링
         filtered_results = [
             r for r in results
             if r["model"] == saved_model["model"] and len(r["model"]) == len(saved_model["model"])
         ]
-
         if not filtered_results:
+            print(f"[DEBUG] 완전 일치 결과 없음: {saved_model['model']}")
             continue
 
-        r = filtered_results[0]  # 첫 번째 결과 사용
+        r = filtered_results[0]
         changed = False
         for key in ["cert_no", "identifier", "cert_date", "exp_date"]:
             if r.get(key) != saved_model.get(key):
                 changed = True
+                print(f"[DEBUG] 변경 감지 - 키: {key}, 이전: {saved_model.get(key)}, 새로운: {r.get(key)}")
                 break
+
         if changed:
             print(f"[INFO] 변경 감지: {saved_model['model']} 이전={saved_model} → 새로운={r}")
             add_model_entry({**r, "channel": channel_id})
             if channel_id:
+                print(f"[DEBUG] 메시지 발송 시도: 채널={channel_id}")
                 await send_dooray_message(channel_id,
                     f"🔔 [{r['model']}] 등록정보가 업데이트 되었어요!\n"
                     f"[{r['cert_no']}] {r['model']}\n"
@@ -242,3 +252,5 @@ async def check_models():
                     f"- 인증일자: {r['cert_date']}\n"
                     f"- 만료일자: {r['exp_date']}"
                 )
+        else:
+            print(f"[DEBUG] 변경 없음: {saved_model['model']}")
