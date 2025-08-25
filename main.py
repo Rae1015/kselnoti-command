@@ -7,7 +7,6 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from bs4 import BeautifulSoup
 
-
 app = FastAPI()
 
 SEARCH_URL = "https://www.crefia.or.kr/portal/store/cardTerminal/cardTerminalList.xx"
@@ -184,6 +183,7 @@ async def kselnoti_action(request: Request):
 async def health_check():
     if getattr(Response, "method", None) == "HEAD":
         return Response(status_code=200)  # body 없는 응답
+    asyncio.create_task(check_models())
     return {"status": "✅ KSEL bot is running"}
 
 # ------------------------------
