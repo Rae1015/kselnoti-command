@@ -31,11 +31,11 @@ def save_models(models):
 def add_model_entry(entry: dict):
     models = load_models()
     # 이미 존재하는 모델인지 확인
-    models = [m for m in models if m.get("model") != entry.get("model")]
+    #models = [m for m in models if m.get("model") != entry.get("model")]
     # 중복 방지 (model + cert_no 기준)
-    if not any(m["model"] == entry["model"] and m.get("cert_no") == entry.get("cert_no") for m in models):
-        models.append(entry)
-        save_models(models)
+    #if not any(m["model"] == entry["model"] and m.get("cert_no") == entry.get("cert_no") for m in models):
+    models.append(entry)
+    save_models(models)
 
 def remove_model_entry(model_name: str):
     models = load_models()
