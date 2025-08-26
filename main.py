@@ -15,9 +15,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_FILE = os.path.join(BASE_DIR, "models.json")
 DOORAY_WEBHOOK_BASE = "https://nhnent.dooray.com/messenger/api/sendMessage?appToken=YOUR_APP_TOKEN"
 
-print("현재 작업 디렉터리:", os.getcwd())
-print("models.json 절대 경로:", os.path.abspath("models.json"))
-
 # ------------------------------
 # JSON 유틸
 # ------------------------------
@@ -33,6 +30,8 @@ def save_models(models):
 
 def add_model_entry(entry: dict):
     models = load_models()
+    # 이미 존재하는 모델인지 확인
+    models = [m for m in models if m.get("model") != entry.get("model")]
     # 중복 방지 (model + cert_no 기준)
     if not any(m["model"] == entry["model"] and m.get("cert_no") == entry.get("cert_no") for m in models):
         models.append(entry)
@@ -74,8 +73,7 @@ async def fetch_model_info(model_name: str):
                             "cert_no": cert_no,
                             "identifier": identifier,
                             "model": model,
-                            #"cert_date": cert_date,
-                            "cert_date": "9999.99.99",
+                            "cert_date": cert_date,
                             "exp_date": exp_date,
                         }
                     )
@@ -166,6 +164,7 @@ async def kselnoti_action(request: Request):
 
     action_name = data.get("actionName")
     action_value = data.get("actionValue")
+    channel_id = data.get("channel_id")
 
     if not action_name:
         return {"text": "⚠️ actionName이 전달되지 않았습니다."}
@@ -175,11 +174,15 @@ async def kselnoti_action(request: Request):
         return JSONResponse({"text": f"🗑 [{action_value}] 제거 완료", "deleteOriginal": True})
 
     if action_name == "new_register":
-        add_model_entry({"model": action_value})
+        add_model_entry({
+            "model": action_value,
+            "channel": channel_id
+        })
         return JSONResponse({"text": f"✅ 신규 모델 [{action_value}] 등록 완료", "deleteOriginal": True})
 
     if action_name == "register":
         entry = json.loads(action_value)
+        entry["channel"] = channel_id  # 채널 저장 추가
         add_model_entry(entry)
         return JSONResponse({"text": f"✅ 모델 [{entry['model']}] 등록 완료", "deleteOriginal": True})
 
@@ -204,7 +207,6 @@ async def health_check():
 async def check_models():
     models = load_models()
     if not models:
-        print("[DEBUG] 등록된 모델이 없습니다.")
         return
 
     print(f"[DEBUG] 총 {len(models)}개의 모델을 확인합니다.")
@@ -217,10 +219,8 @@ async def check_models():
 
     for saved_model, results in zip(models, results_list):
         channel_id = saved_model.get("channel", "")
-        print(f"[DEBUG] 저장된 모델: {saved_model['model']}, 조회 결과 수: {len(results)}")
 
         if not results:
-            print(f"[DEBUG] 조회 결과 없음: {saved_model['model']}")
             continue
 
         # 모델명 완전 일치 필터링
@@ -229,7 +229,6 @@ async def check_models():
             if r["model"] == saved_model["model"] and len(r["model"]) == len(saved_model["model"])
         ]
         if not filtered_results:
-            print(f"[DEBUG] 완전 일치 결과 없음: {saved_model['model']}")
             continue
 
         r = filtered_results[0]
