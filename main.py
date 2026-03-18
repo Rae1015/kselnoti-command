@@ -86,6 +86,7 @@ async def fetch_model_info(model_name: str):
 async def kselnoti(request: Request):
     text = ""
     response_url = ""
+    channel_id = ""
 
     # 🔹 1. form 먼저 시도
     try:
@@ -102,7 +103,7 @@ async def kselnoti(request: Request):
             data = await request.json()
             text = data.get("text")
             response_url = data.get("response_url")
-            channel_id = form.get("channel_id")
+            channel_id = data.get("channel_id")  # ✅ 수정!
         except:
             pass
 
@@ -110,12 +111,9 @@ async def kselnoti(request: Request):
     print("DEBUG response_url:", response_url)
     print("DEBUG channel_id:", channel_id)
 
-    # 🔹 3. 안전 처리
     text = (text or "").strip()
-    if not text:
-        return JSONResponse({"text": "⚠ 모델명을 입력해주세요."})
     
-    
+
     # ------------------------------
     # 🔥 1단계 테스트: 숫자 입력 → 타이머
     # ------------------------------
