@@ -116,7 +116,8 @@ async def kselnoti(request: Request):
         sec = int(text)
 
         # 비동기 백그라운드 실행
-        asyncio.create_task(send_delayed_message(sec, response_url))
+        #asyncio.create_task(send_delayed_message(sec, response_url))
+        asyncio.create_task(send_delayed_message(sec, channel_id))
 
         return JSONResponse({
             "text": f"{sec}초 뒤에 알림을 보낼게요!"
@@ -196,7 +197,8 @@ async def kselnoti_action(request: Request):
 
     action_name = data.get("actionName")
     action_value = data.get("actionValue")
-    channel_id = data.get("channel_id")
+    #channel_id = data.get("channel_id")
+    channel_id = form.get("channel_id") or data.get("channel_id")
 
     if not action_name:
         return {"text": "⚠️ actionName이 전달되지 않았습니다."}
@@ -286,16 +288,18 @@ async def check_models():
         else:
             print(f"[DEBUG] 변경 없음: {saved_model['model']}")
 
-async def send_delayed_message(sec: int, response_url: str):
+async def send_delayed_message(sec: int, channel_id: str):
     await asyncio.sleep(sec)
 
-    if not response_url:
-        print("❌ response_url 없음")
+    if not channel_id:
+        print("❌ channel_id 없음")
         return
+
+    url = f"{DOORAY_WEBHOOK_BASE}&channelId={channel_id}"
 
     try:
         async with aiohttp.ClientSession() as session:
-            res = await session.post(response_url, json={
+            res = await session.post(url, json={
                 "text": f"{sec}초 후 알림입니다!"
             })
             print("✅ 전송 성공:", res.status)
