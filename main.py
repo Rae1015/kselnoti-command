@@ -84,9 +84,13 @@ async def fetch_model_info(model_name: str):
 # ------------------------------
 @app.post("/kselnoti")
 async def kselnoti(request: Request):
-    data = await request.json()
-    text = data.get("text", "").strip()
-    response_url = data.get("response_url")  
+    form = await request.form()
+
+    text = form.get("text")
+    response_url = form.get("response_url")
+
+    print("DEBUG text:", text)
+    print("DEBUG response_url:", response_url)
 
     if not text:
         return JSONResponse({"text": "⚠ 모델명을 입력해주세요."})
@@ -271,7 +275,15 @@ async def check_models():
 async def send_delayed_message(sec: int, response_url: str):
     await asyncio.sleep(sec)
 
-    async with aiohttp.ClientSession() as session:
-        await session.post(response_url, json={
-            "text": f"{sec}초 후 알림입니다!"
-        })
+    if not response_url:
+        print("❌ response_url 없음")
+        return
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            res = await session.post(response_url, json={
+                "text": f"{sec}초 후 알림입니다!"
+            })
+            print("✅ 전송 성공:", res.status)
+    except Exception as e:
+        print("❌ 전송 실패:", e)
