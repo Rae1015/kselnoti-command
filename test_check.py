@@ -1,10 +1,9 @@
 import json
-import asyncio
-from main import save_models, check_models
+from main import load_models, save_models, add_model_entry
 
-# 테스트용 모델 데이터 저장 (만료일자 일부러 잘못 저장)
-def setup_test_data():
-    fake_model = {
+def test_register_model():
+    # 1. 가짜 모델 데이터 생성
+    test_entry = {
         "cert_no": "2015-012-C1",
         "identifier": "#####KTC5700101b",
         "model": "KTC5700",   # 실제 사이트에 존재하는 모델명을 넣어야 함!
@@ -12,10 +11,14 @@ def setup_test_data():
         "exp_date": "9999.99.99",   # <-- 일부러 틀린 값
         "channel": "4021293257473884753"
     }
-    save_models([fake_model])
-    print("[TEST] models.json에 테스트 데이터 저장 완료:", fake_model)
 
-# 테스트 실행
+    # 2. 등록
+    add_model_entry(test_entry)
+
+    # 3. 불러오기
+    models = load_models()
+    print("현재 models.json 내용:")
+    print(json.dumps(models, indent=2, ensure_ascii=False))
+
 if __name__ == "__main__":
-    setup_test_data()
-    asyncio.run(check_models())
+    test_register_model()

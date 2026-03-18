@@ -86,9 +86,23 @@ async def fetch_model_info(model_name: str):
 async def kselnoti(request: Request):
     data = await request.json()
     text = data.get("text", "").strip()
+    response_url = data.get("response_url")  
 
     if not text:
         return JSONResponse({"text": "⚠ 모델명을 입력해주세요."})
+    
+    # ------------------------------
+    # 🔥 1단계 테스트: 숫자 입력 → 타이머
+    # ------------------------------
+    if text.isdigit():
+        sec = int(text)
+
+        # 비동기 백그라운드 실행
+        asyncio.create_task(send_delayed_message(sec, response_url))
+
+        return JSONResponse({
+            "text": f"{sec}초 뒤에 알림을 보낼게요!"
+        })
 
     # --- 리스트 조회 기능 ---
     if text.lower() == "list":
@@ -253,3 +267,11 @@ async def check_models():
                 )
         else:
             print(f"[DEBUG] 변경 없음: {saved_model['model']}")
+
+async def send_delayed_message(sec: int, response_url: str):
+    await asyncio.sleep(sec)
+
+    async with aiohttp.ClientSession() as session:
+        await session.post(response_url, json={
+            "text": f"{sec}초 후 알림입니다!"
+        })
