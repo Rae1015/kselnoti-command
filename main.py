@@ -295,10 +295,10 @@ async def check_models():
         else:
             print(f"[DEBUG] 변경 없음: {saved_model['model']}")
 
-async def send_delayed_message(sec: int, channel_id: str):
+async def send_delayed_message(sec: int):
     await asyncio.sleep(sec)
 
     async with aiohttp.ClientSession() as session:
-        await session.post(DOORAY_WEBHOOK_URL, json={
+        await session.post(DOORAY_WEBHOOK_BASE, json={
             "text": f"{sec}초 후 알림입니다!"
         })
