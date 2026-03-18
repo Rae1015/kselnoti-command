@@ -13,7 +13,7 @@ app = FastAPI()
 SEARCH_URL = "https://www.crefia.or.kr/portal/store/cardTerminal/cardTerminalList.xx"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_FILE = os.path.join(BASE_DIR, "models.json")
-DOORAY_WEBHOOK_BASE = "https://nhnent.dooray.com/messenger/api/sendMessage?appToken=YOUR_APP_TOKEN"
+DOORAY_WEBHOOK_BASE = "https://nhnent.dooray.com/messenger/api/sendMessage?appToken=1b4d253a-d8bf-4016-9647-5602ffeb71fd"
 
 # ------------------------------
 # JSON 유틸
@@ -122,7 +122,9 @@ async def kselnoti(request: Request):
 
         # 비동기 백그라운드 실행
         #asyncio.create_task(send_delayed_message(sec, response_url))
-        asyncio.create_task(send_delayed_message(sec, channel_id))
+        #asyncio.create_task(send_delayed_message(sec, channel_id))
+        sec = int(text)
+        asyncio.create_task(send_delayed_message(sec))
 
         return JSONResponse({
             "text": f"{sec}초 뒤에 알림을 보낼게요!"
@@ -296,17 +298,7 @@ async def check_models():
 async def send_delayed_message(sec: int, channel_id: str):
     await asyncio.sleep(sec)
 
-    if not channel_id:
-        print("❌ channel_id 없음")
-        return
-
-    url = f"{DOORAY_WEBHOOK_BASE}&channelId={channel_id}"
-
-    try:
-        async with aiohttp.ClientSession() as session:
-            res = await session.post(url, json={
-                "text": f"{sec}초 후 알림입니다!"
-            })
-            print("✅ 전송 성공:", res.status)
-    except Exception as e:
-        print("❌ 전송 실패:", e)
+    async with aiohttp.ClientSession() as session:
+        await session.post(DOORAY_WEBHOOK_URL, json={
+            "text": f"{sec}초 후 알림입니다!"
+        })
