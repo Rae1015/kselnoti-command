@@ -14,6 +14,7 @@ SEARCH_URL = "https://www.crefia.or.kr/portal/store/cardTerminal/cardTerminalLis
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_FILE = os.path.join(BASE_DIR, "models.json")
 DOORAY_WEBHOOK_BASE = "https://nhnent.dooray.com/messenger/api/sendMessage?appToken=1b4d253a-d8bf-4016-9647-5602ffeb71fd"
+DOORAY_WEBHOOK_URL = "https://nhnent.dooray.com/services/3624879285692785039/4138653286819109563/u2TMOHzHRkufJM_GmEkKsQ"
 
 # ------------------------------
 # JSON 유틸
@@ -298,7 +299,11 @@ async def check_models():
 async def send_delayed_message(sec: int):
     await asyncio.sleep(sec)
 
-    async with aiohttp.ClientSession() as session:
-        await session.post(DOORAY_WEBHOOK_BASE, json={
-            "text": f"{sec}초 후 알림입니다!"
-        })
+    try:
+        async with aiohttp.ClientSession() as session:
+            res = await session.post(DOORAY_WEBHOOK_URL, json={
+                "text": f"{sec}초 후 알림입니다!"
+            })
+            print("✅ Dooray 응답:", res.status)
+    except Exception as e:
+        print("❌ 전송 실패:", e)
