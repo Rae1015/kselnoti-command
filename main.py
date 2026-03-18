@@ -84,14 +84,28 @@ async def fetch_model_info(model_name: str):
 # ------------------------------
 @app.post("/kselnoti")
 async def kselnoti(request: Request):
-    form = await request.form()
+    text = ""
+    response_url = ""
 
-    text = form.get("text")
-    response_url = form.get("response_url")
+    # 🔹 1. form 먼저 시도
+    try:
+        form = await request.form()
+        text = form.get("text")
+        response_url = form.get("response_url")
+    except:
+        pass
 
-    print("DEBUG text:", text)
-    print("DEBUG response_url:", response_url)
+    # 🔹 2. json fallback
+    if not text:
+        try:
+            data = await request.json()
+            text = data.get("text")
+            response_url = data.get("response_url")
+        except:
+            pass
 
+    # 🔹 3. 안전 처리
+    text = (text or "").strip()
     if not text:
         return JSONResponse({"text": "⚠ 모델명을 입력해주세요."})
     
