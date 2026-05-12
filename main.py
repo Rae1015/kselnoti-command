@@ -13,12 +13,12 @@ from bs4 import BeautifulSoup
 SEARCH_URL = "https://www.crefia.or.kr/portal/store/cardTerminal/cardTerminalList.xx"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_FILE = os.path.join(BASE_DIR, "models.json")
-
+ 
 DOORAY_WEBHOOK_URL = "https://nhnent.dooray.com/services/3624879285692785039/4138653286819109563/u2TMOHzHRkufJM_GmEkKsQ"
 
 # 슬래시 커맨드 응답 URL (두레이가 요청 시 보내주는 responseUrl 사용 권장, 없으면 webhook fallback)
 # 버튼 클릭 콜백을 받을 서버 주소 (본인 서버 URL로 변경)
-SERVER_BASE_URL = os.environ.get("SERVER_BASE_URL", "https://your-server.example.com")
+SERVER_BASE_URL = os.environ.get("SERVER_BASE_URL", "https://kselnoti-command.onrender.com")
 
 CHECK_INTERVAL_SECONDS = 3600  # 1시간
 
